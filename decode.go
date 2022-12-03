@@ -341,19 +341,7 @@ func (d *decoder) terror(n *Node, tag string, out reflect.Value) {
 	if n.Tag != "" {
 		tag = n.Tag
 	}
-	value := n.Value
-	if tag != seqTag && tag != mapTag {
-		if len(value) > 10 {
-			value = " `" + value[:7] + "...`"
-		} else {
-			value = " `" + value + "`"
-		}
-	}
-	d.terrors = append(d.terrors, UnmarshalError{
-		Message: fmt.Sprintf("cannot unmarshal %s%s into %s", shortTag(tag), value, out.Type()),
-		Line:    n.Line,
-		Column:  n.Column,
-	})
+	d.terrors = append(d.terrors, NewInvalidTypeError(n.Line, n.Column, tag, n.Value, out.Type()))
 }
 
 func (d *decoder) callUnmarshaler(n *Node, u Unmarshaler) (good bool) {
@@ -767,11 +755,7 @@ func (d *decoder) mapping(n *Node, out reflect.Value) (good bool) {
 			for j := i + 2; j < l; j += 2 {
 				nj := n.Content[j]
 				if ni.Kind == nj.Kind && ni.Value == nj.Value {
-					d.terrors = append(d.terrors, UnmarshalError{
-						Message: fmt.Sprintf("mapping key %#v already defined at line %d", nj.Value, ni.Line),
-						Line:    nj.Line,
-						Column:  nj.Column,
-					})
+					d.terrors = append(d.terrors, NewDuplicateMappingKeyError(nj.Line, nj.Column, nj.Value, ni.Line))
 				}
 			}
 		}
@@ -891,11 +875,7 @@ func (d *decoder) mappingStruct(n *Node, out reflect.Value) (good bool) {
 		if info, ok := sinfo.FieldsMap[name.String()]; ok {
 			if d.uniqueKeys {
 				if doneFields[info.Id] {
-					d.terrors = append(d.terrors, UnmarshalError{
-						Message: fmt.Sprintf("field %s already set in type %s", name.String(), out.Type()),
-						Line:    ni.Line,
-						Column:  ni.Column,
-					})
+					d.terrors = append(d.terrors, NewFieldAlreadySetError(ni.Line, ni.Column, name.String(), out.Type()))
 					continue
 				}
 				doneFields[info.Id] = true
@@ -915,11 +895,7 @@ func (d *decoder) mappingStruct(n *Node, out reflect.Value) (good bool) {
 			d.unmarshal(n.Content[i+1], value)
 			inlineMap.SetMapIndex(name, value)
 		} else if d.knownFields {
-			d.terrors = append(d.terrors, UnmarshalError{
-				Message: fmt.Sprintf("field %s not found in type %s", name.String(), out.Type()),
-				Line:    ni.Line,
-				Column:  ni.Column,
-			})
+			d.terrors = append(d.terrors, NewUnknownFieldError(ni.Line, ni.Column, name.String(), out.Type()))
 		}
 	}
 	return true

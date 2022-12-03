@@ -1123,8 +1123,8 @@ func (s *S) TestUnmarshalerWholeDocument(c *C) {
 }
 
 func (s *S) TestUnmarshalerTypeError(c *C) {
-	unmarshalerResult[2] = &yaml.TypeError{[]yaml.UnmarshalError{{"foo", 1, 1}}}
-	unmarshalerResult[4] = &yaml.TypeError{[]yaml.UnmarshalError{{"bar", 1, 1}}}
+	unmarshalerResult[2] = &yaml.TypeError{[]yaml.UnmarshalError{yaml.NewInvalidTypeError(1, 2, "foo", "bar", reflect.TypeOf(0))}}
+	unmarshalerResult[4] = &yaml.TypeError{[]yaml.UnmarshalError{yaml.NewInvalidTypeError(1, 2, "bar", "baz", reflect.TypeOf(true))}}
 	defer func() {
 		delete(unmarshalerResult, 2)
 		delete(unmarshalerResult, 4)
@@ -1141,8 +1141,8 @@ func (s *S) TestUnmarshalerTypeError(c *C) {
 	c.Assert(err, ErrorMatches, ""+
 		"yaml: unmarshal errors:\n"+
 		"  line 1: cannot unmarshal !!str `A` into int\n"+
-		"  line 1: foo\n"+
-		"  line 1: bar\n"+
+		"  line 1: cannot unmarshal foo `bar` into int\n"+
+		"  line 1: cannot unmarshal bar `baz` into bool\n"+
 		"  line 1: cannot unmarshal !!str `B` into int")
 	c.Assert(v.M["abc"], NotNil)
 	c.Assert(v.M["def"], IsNil)
@@ -1154,8 +1154,8 @@ func (s *S) TestUnmarshalerTypeError(c *C) {
 }
 
 func (s *S) TestObsoleteUnmarshalerTypeError(c *C) {
-	unmarshalerResult[2] = &yaml.TypeError{[]yaml.UnmarshalError{{"foo", 1, 1}}}
-	unmarshalerResult[4] = &yaml.TypeError{[]yaml.UnmarshalError{{"bar", 1, 1}}}
+	unmarshalerResult[2] = &yaml.TypeError{[]yaml.UnmarshalError{yaml.NewInvalidTypeError(1, 2, "foo", "bar", reflect.TypeOf(0))}}
+	unmarshalerResult[4] = &yaml.TypeError{[]yaml.UnmarshalError{yaml.NewInvalidTypeError(1, 2, "bar", "baz", reflect.TypeOf(true))}}
 	defer func() {
 		delete(unmarshalerResult, 2)
 		delete(unmarshalerResult, 4)
@@ -1172,8 +1172,8 @@ func (s *S) TestObsoleteUnmarshalerTypeError(c *C) {
 	c.Assert(err, ErrorMatches, ""+
 		"yaml: unmarshal errors:\n"+
 		"  line 1: cannot unmarshal !!str `A` into int\n"+
-		"  line 1: foo\n"+
-		"  line 1: bar\n"+
+		"  line 1: cannot unmarshal foo `bar` into int\n"+
+		"  line 1: cannot unmarshal bar `baz` into bool\n"+
 		"  line 1: cannot unmarshal !!str `B` into int")
 	c.Assert(v.M["abc"], NotNil)
 	c.Assert(v.M["def"], IsNil)

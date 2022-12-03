@@ -331,10 +331,146 @@ func (e *ParserError) Error() string {
 }
 
 // UnmarshalError is each error with a source position found by Unmarshal.
-type UnmarshalError struct {
-	Message string
-	Line    int
-	Column  int
+type UnmarshalError interface {
+	error
+	// Line returns the line number that triggered the error.
+	Line() int
+	// Column returns the column number that triggered the error.
+	Column() int
+}
+
+type baseUnmarshalError struct {
+	line   int
+	column int
+}
+
+// Line returns the line number that triggered the error.
+func (e *baseUnmarshalError) Line() int { return e.line }
+// Column returns the column number that triggered the error.
+func (e *baseUnmarshalError) Column() int { return e.column }
+
+// InvalidTypeError is an UnmarshalError which is created when a yaml value
+// could not be decoded into a Go type.
+type InvalidTypeError struct {
+	baseUnmarshalError
+	tag   string
+	value string
+	rtype reflect.Type
+}
+
+// NewInvalidTypeError creates an InvalidTypeError.
+func NewInvalidTypeError(line, column int, tag string, value string, rtype reflect.Type) *InvalidTypeError {
+	return &InvalidTypeError{
+		baseUnmarshalError: baseUnmarshalError{
+			line:   line,
+			column: column,
+		},
+		tag:   tag,
+		value: value,
+		rtype: rtype,
+	}
+}
+
+// Tag returns the raw yaml tag.
+func (e *InvalidTypeError) Tag() string { return e.tag }
+// Value returns the raw yaml value.
+func (e *InvalidTypeError) Value() string { return e.value }
+// Type returns the Go type of the target field.
+func (e *InvalidTypeError) Type() reflect.Type { return e.rtype }
+func (e *InvalidTypeError) Error() string {
+	value := e.value
+	if e.tag != seqTag && e.tag != mapTag {
+		if len(value) > 10 {
+			value = " `" + value[:7] + "...`"
+		} else {
+			value = " `" + value + "`"
+		}
+	}
+	return fmt.Sprintf("cannot unmarshal %s%s into %s", shortTag(e.tag), value, e.rtype)
+}
+
+// DuplicateMappingKeyError is an UnmarshalError which is created when a yaml
+// mapping contains duplicated keys.
+type DuplicateMappingKeyError struct {
+	baseUnmarshalError
+	key           string
+	duplicateLine int
+}
+
+// NewDuplicateMappingKeyError creates an DuplicateMappingKeyError.
+func NewDuplicateMappingKeyError(line, column int, key string, duplicateLine int) *DuplicateMappingKeyError {
+	return &DuplicateMappingKeyError{
+		baseUnmarshalError: baseUnmarshalError{
+			line:   line,
+			column: column,
+		},
+		key:           key,
+		duplicateLine: duplicateLine,
+	}
+}
+
+// Key returns the duplicated key.
+func (e *DuplicateMappingKeyError) Key() string { return e.key }
+// DuplicateLine returns the line number where the key is duplicated.
+func (e *DuplicateMappingKeyError) DuplicateLine() int { return e.duplicateLine }
+func (e *DuplicateMappingKeyError) Error() string {
+	return fmt.Sprintf("mapping key %#v already defined at line %d", e.key, e.duplicateLine)
+}
+
+// FieldAlreadySetError is an UnmarshalError which is created when a yaml field
+// was already mapped to the target Go type.
+type FieldAlreadySetError struct {
+	baseUnmarshalError
+	field string
+	rtype reflect.Type
+}
+
+// NewFieldAlreadySetError creates a FieldAlreadySetError.
+func NewFieldAlreadySetError(line, column int, field string, rtype reflect.Type) *FieldAlreadySetError {
+	return &FieldAlreadySetError{
+		baseUnmarshalError: baseUnmarshalError{
+			line:   line,
+			column: column,
+		},
+		field: field,
+		rtype: rtype,
+	}
+}
+
+// Field returns the yaml field.
+func (e *FieldAlreadySetError) Field() string { return e.field }
+// Type returns the target Go type.
+func (e *FieldAlreadySetError) Type() reflect.Type { return e.rtype }
+func (e *FieldAlreadySetError) Error() string {
+	return fmt.Sprintf("field %s already set in type %s", e.field, e.rtype)
+}
+
+// UnknownFieldError is an UnmarshalError which is created when a yaml field is
+// not found in the target Go type.
+type UnknownFieldError struct {
+	baseUnmarshalError
+	field string
+	rtype reflect.Type
+}
+
+// NewUnknownFieldError creates a UnknownFieldError.
+func NewUnknownFieldError(line, column int, field string, rtype reflect.Type) *UnknownFieldError {
+	return &UnknownFieldError{
+		baseUnmarshalError: baseUnmarshalError{
+			line:   line,
+			column: column,
+		},
+		field: field,
+		rtype: rtype,
+	}
+}
+
+// Field returns the yaml field.
+func (e *UnknownFieldError) Field() string { return e.field }
+// Type returns the target Go type.
+func (e *UnknownFieldError) Type() reflect.Type { return e.rtype }
+func (e *UnknownFieldError) Error() string {
+	return fmt.Sprintf("field %s not found in type %s", e.field, e.rtype)
 }
 
 // A TypeError is returned by Unmarshal when one or more fields in
@@ -349,7 +485,7 @@ func (e *TypeError) Error() string {
 	var b strings.Builder
 	b.WriteString("yaml: unmarshal errors:")
 	for _, err := range e.Errors {
-		b.WriteString(fmt.Sprintf("\n  line %d: %s", err.Line, err.Message))
+		b.WriteString(fmt.Sprintf("\n  line %d: %s", err.Line(), err.Error()))
 	}
 	return b.String()
 }
